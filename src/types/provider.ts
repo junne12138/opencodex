@@ -262,6 +262,35 @@ export type TierDecision =
   | { readonly kind: "drop" }
   | { readonly kind: "set"; readonly value: string };
 
+export type ProviderQuotaQueryValue = string | number | boolean | null
+  | { $credential: string }
+  | { $env: string };
+
+export interface ProviderQuotaQueryConfig {
+  /** Absolute endpoint on the same origin as `baseUrl`. HTTPS only. */
+  url: string;
+  method?: "GET" | "POST";
+  /** Optional JSON object containing values referenced by `$credential`. */
+  credentialsFile?: string;
+  /** Header values are references so credentials are never persisted inline. */
+  headers?: Record<string, { $credential: string } | { $env: string }>;
+  /** Flat JSON request body. Supported only for POST. */
+  body?: Record<string, ProviderQuotaQueryValue>;
+  response: {
+    /** Optional dot path to the object containing the mapped fields. */
+    root?: string;
+    limit?: string;
+    used?: string;
+    remaining?: string;
+    percent?: string;
+    resetAt?: string;
+  };
+  window?: "five-hour" | "weekly" | "monthly" | "custom";
+  unit?: "usd" | "units";
+  label?: string;
+  timeoutMs?: number;
+}
+
 /**
  * One configured provider entry. `authMode` (default `"key"`) decides whether same-target 429
  * retries are allowed; OAuth/forward credentials and local runtimes are never replayed.
@@ -326,6 +355,8 @@ export interface OcxProviderConfig {
    */
   responseTierAuthoritative?: boolean;
   baseUrl: string;
+  /** Optional generic quota probe for custom providers. */
+  quotaQuery?: ProviderQuotaQueryConfig;
   /**
    * Optional relative resource path for key-auth openai-responses requests. Must start with `/`
    * and must not include a URL scheme, query string, or fragment. When omitted, the adapter keeps

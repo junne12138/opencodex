@@ -128,6 +128,8 @@ export type {
   AttemptTierOutcome,
   TierObservationContext,
   TierDecision,
+  ProviderQuotaQueryValue,
+  ProviderQuotaQueryConfig,
   OcxProviderConfig,
   ModelCapabilities,
 } from "./types/provider";

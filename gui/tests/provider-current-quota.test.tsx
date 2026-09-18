@@ -101,7 +101,6 @@ test("unsupported, passive unobserved, explicit loading and failed last-good are
   expect(failed).toContain("Quota updated");
 });
 
-
 test("safe account failure categories reach both current and all-account quota views", () => {
   const quota = { weeklyPercent: 12, updatedAt: observedAt };
   const reading = { quotaMode: "probe" as const, quota, quotaUnavailable: true, quotaFailure: "dns_failed" as const };
@@ -115,4 +114,21 @@ test("safe account failure categories reach both current and all-account quota v
   expect(unknown).not.toContain("hostname");
   const recovered = render(<ProviderAccountQuota {...reading} quotaUnavailable={false} />);
   expect(recovered).not.toContain("hostname");
+});
+
+test("custom provider quota remains visible when the active key has no account-scoped reader", () => {
+  const quota = {
+    monthlyPercent: 60,
+    creditsUsd: { used: 210, limit: 350, remaining: 140, percent: 60 },
+    updatedAt: observedAt,
+  };
+  const markup = render(<ProviderCurrentQuota
+    report={{ source: "custom:quota-query", quota, updatedAt: observedAt }}
+    reading={{ quotaMode: "unsupported" }}
+  />);
+
+  expect(markup).toContain("Provider quota");
+  expect(markup).toContain("60% used");
+  expect(markup).toContain("US$140.00");
+  expect(markup).not.toContain("Quota lookup is not supported for this account.");
 });

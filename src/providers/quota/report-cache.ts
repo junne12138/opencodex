@@ -131,7 +131,10 @@ function cacheKey(config: OcxConfig): string {
         ? resolveProviderApiKey(provider.apiKey)?.trim()
         : undefined;
       const activeKeyId = resolvedKey ? apiKeyPoolEntryId(resolvedKey) : "none";
-      return `${name}:${provider.adapter}:${provider.authMode ?? "key"}:${providerCodexAccountMode(name, provider) ?? "none"}:${provider.disabled === true ? "off" : "on"}:${provider.baseUrl}:${activeKeyId}`;
+      const quotaQueryId = provider.quotaQuery
+        ? createHash("sha256").update(JSON.stringify(provider.quotaQuery)).digest("hex").slice(0, 16)
+        : "none";
+      return `${name}:${provider.adapter}:${provider.authMode ?? "key"}:${providerCodexAccountMode(name, provider) ?? "none"}:${provider.disabled === true ? "off" : "on"}:${provider.baseUrl}:${activeKeyId}:${quotaQueryId}`;
     })
     .sort()
     .join("|");

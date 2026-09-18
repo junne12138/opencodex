@@ -13,7 +13,10 @@ export default function ProviderCurrentQuota({ report, reading, onRefreshQuota }
 }) {
   const t = useT();
   const current = currentAccountQuotaReport(report);
-  const rowOwnsReading = reading !== undefined && (
+  const providerScopedCustomQuota = reading?.quotaMode === "unsupported"
+    && report?.source === "custom:quota-query"
+    && accountQuotaFromReport(report) !== null;
+  const rowOwnsReading = !providerScopedCustomQuota && reading !== undefined && (
     reading.quotaMode !== undefined || reading.quota !== undefined
     || reading.quotaUnavailable !== undefined || reading.quotaPending !== undefined
   );
@@ -32,9 +35,10 @@ export default function ProviderCurrentQuota({ report, reading, onRefreshQuota }
     catch { setResult(false); }
     finally { setRefreshing(false); }
   };
-  return <section className="pws-usage-block" aria-label={t("pws.currentAccountUsage")}>
+  const title = t(providerScopedCustomQuota ? "pws.providerQuota" : "pws.currentAccountUsage");
+  return <section className="pws-usage-block" aria-label={title}>
     <div className="pws-usage-block-head">
-      <h3 className="pws-section-title">{t("pws.currentAccountUsage")}</h3>
+      <h3 className="pws-section-title">{title}</h3>
       {onRefreshQuota && effective.quotaMode !== "unsupported" && <div className="pws-quota-refresh">
         {result !== null && <span role="status" className={result ? "pws-status-ok" : "pws-status-warn"}>
           {t(result ? "pws.quotaCheckCompleted" : "codexAuth.quotaRefreshFailed")}

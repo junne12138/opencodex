@@ -29,6 +29,134 @@ const SENSITIVE_PROVIDER_HEADERS = new Set([
 const REASONING_SUMMARY_DELIVERY_SET = new Set<string>(REASONING_SUMMARY_DELIVERY_VALUES);
 const DISPLAY_NAME_CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f\u2028\u2029]/;
 const MAX_MODEL_DISPLAY_NAME_LENGTH = 128;
+const QUOTA_PATH_PATTERN = /^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$/;
+const ENV_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const MAX_QUOTA_LABEL_LENGTH = 128;
+const QUOTA_WINDOWS = new Set(["five-hour", "weekly", "monthly", "custom"]);
+const QUOTA_UNITS = new Set(["usd", "units"]);
+const FORBIDDEN_QUOTA_REQUEST_HEADERS = new Set([
+  "connection",
+  "content-length",
+  "host",
+  "set-cookie",
+  "transfer-encoding",
+]);
+const WINDOWS_ABSOLUTE_PATH_PATTERN = /^[A-Za-z]:[\\/]/;
+
+function plainRecord(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function quotaValueSourceError(value: unknown, field: string, allowLiteral: boolean): string | null {
+  if (allowLiteral && (value === null || ["string", "number", "boolean"].includes(typeof value))) {
+    return typeof value === "number" && !Number.isFinite(value) ? `${field} must be finite` : null;
+  }
+  if (!plainRecord(value)) return `${field} must be a credential or environment reference`;
+  const entries = Object.entries(value);
+  if (entries.length !== 1) return `${field} must contain exactly one of $credential or $env`;
+  const [kind, path] = entries[0]!;
+  if (kind === "$credential") {
+    return typeof path === "string" && QUOTA_PATH_PATTERN.test(path)
+      ? null : `${field}.$credential must be a dot path`;
+  }
+  if (kind === "$env") {
+    return typeof path === "string" && ENV_NAME_PATTERN.test(path)
+      ? null : `${field}.$env must be an environment variable name`;
+  }
+  return `${field} must contain exactly one of $credential or $env`;
+}
+
+function quotaUsesCredential(value: unknown): boolean {
+  return plainRecord(value) && Object.hasOwn(value, "$credential");
+}
+
+/** Strict custom-quota boundary shared by persisted config and management writes. */
+export function providerQuotaQueryConfigError(value: unknown, providerBaseUrl?: unknown): string | null {
+  if (value === undefined) return null;
+  if (!plainRecord(value)) return "quotaQuery must be a plain object";
+  const allowed = new Set(["url", "method", "credentialsFile", "headers", "body", "response", "window", "unit", "label", "timeoutMs"]);
+  const unknown = Object.keys(value).filter(key => !allowed.has(key));
+  if (unknown.length) return `quotaQuery has unexpected fields ${unknown.map(redactSecretString).join(", ")}`;
+
+  if (typeof value.url !== "string") return "quotaQuery.url must be an absolute HTTPS URL";
+  let endpoint: URL;
+  let provider: URL;
+  try {
+    endpoint = new URL(value.url);
+    provider = new URL(String(providerBaseUrl));
+  } catch {
+    return "quotaQuery.url must be an absolute HTTPS URL";
+  }
+  if (endpoint.protocol !== "https:" || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) {
+    return "quotaQuery.url must be an absolute HTTPS URL without embedded credentials, a query, or a fragment";
+  }
+  if (endpoint.origin !== provider.origin) return "quotaQuery.url must use the same origin as provider baseUrl";
+  if (value.method !== undefined && value.method !== "GET" && value.method !== "POST") {
+    return "quotaQuery.method must be GET or POST";
+  }
+  if (value.credentialsFile !== undefined) {
+    if (typeof value.credentialsFile !== "string" || !value.credentialsFile.trim()) {
+      return "quotaQuery.credentialsFile must be a nonblank path";
+    }
+    if (!value.credentialsFile.startsWith("~/")
+      && !value.credentialsFile.startsWith("/")
+      && !WINDOWS_ABSOLUTE_PATH_PATTERN.test(value.credentialsFile)) {
+      return "quotaQuery.credentialsFile must be absolute or start with ~/";
+    }
+  }
+  if (value.headers !== undefined) {
+    if (!plainRecord(value.headers)) return "quotaQuery.headers must be a plain object";
+    for (const [name, source] of Object.entries(value.headers)) {
+      if (!HEADER_NAME_PATTERN.test(name) || FORBIDDEN_QUOTA_REQUEST_HEADERS.has(name.toLowerCase())) {
+        return `quotaQuery header ${JSON.stringify(redactSecretString(name))} is invalid`;
+      }
+      const error = quotaValueSourceError(source, `quotaQuery.headers.${redactSecretString(name)}`, false);
+      if (error) return error;
+    }
+  }
+  if (value.body !== undefined) {
+    if ((value.method ?? "GET") !== "POST") return "quotaQuery.body requires method POST";
+    if (!plainRecord(value.body)) return "quotaQuery.body must be a flat JSON object";
+    for (const [name, source] of Object.entries(value.body)) {
+      if (!name || ["__proto__", "prototype", "constructor"].includes(name)) return "quotaQuery.body has an invalid field name";
+      const error = quotaValueSourceError(source, `quotaQuery.body.${redactSecretString(name)}`, true);
+      if (error) return error;
+    }
+  }
+  if (!plainRecord(value.response)) return "quotaQuery.response must be a plain object";
+  const responseAllowed = new Set(["root", "limit", "used", "remaining", "percent", "resetAt"]);
+  const responseUnknown = Object.keys(value.response).filter(key => !responseAllowed.has(key));
+  if (responseUnknown.length) return `quotaQuery.response has unexpected fields ${responseUnknown.map(redactSecretString).join(", ")}`;
+  for (const [name, path] of Object.entries(value.response)) {
+    if (typeof path !== "string" || !QUOTA_PATH_PATTERN.test(path)) return `quotaQuery.response.${name} must be a dot path`;
+  }
+  const hasPercent = typeof value.response.percent === "string";
+  const hasAmounts = typeof value.response.limit === "string"
+    && (typeof value.response.used === "string" || typeof value.response.remaining === "string");
+  if (!hasPercent && !hasAmounts) {
+    return "quotaQuery.response requires percent, or limit with used or remaining";
+  }
+  if (value.window !== undefined && !QUOTA_WINDOWS.has(String(value.window))) {
+    return "quotaQuery.window must be five-hour, weekly, monthly, or custom";
+  }
+  if (value.unit !== undefined && !QUOTA_UNITS.has(String(value.unit))) {
+    return "quotaQuery.unit must be usd or units";
+  }
+  if (value.label !== undefined && (typeof value.label !== "string" || !value.label.trim() || value.label.length > MAX_QUOTA_LABEL_LENGTH || /[\r\n]/.test(value.label))) {
+    return `quotaQuery.label must be nonblank, single-line, and at most ${MAX_QUOTA_LABEL_LENGTH} characters`;
+  }
+  if (value.timeoutMs !== undefined && (typeof value.timeoutMs !== "number" || !Number.isInteger(value.timeoutMs) || value.timeoutMs < 1_000 || value.timeoutMs > 30_000)) {
+    return "quotaQuery.timeoutMs must be an integer from 1000 to 30000";
+  }
+  const usesCredential = Object.values(value.headers ?? {}).some(quotaUsesCredential)
+    || Object.values(value.body ?? {}).some(quotaUsesCredential);
+  if (usesCredential && value.credentialsFile === undefined) {
+    return "quotaQuery.credentialsFile is required by $credential references";
+  }
+  return null;
+}
 
 /** Operator pins share one strict boundary across config and management writes. */
 export function pinnedReasoningEffortConfigError(value: unknown, allowClear = false): string | null {

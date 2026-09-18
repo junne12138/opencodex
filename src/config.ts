@@ -75,6 +75,7 @@ export {
   positiveIntegerRecordConfigError,
   providerBaseUrlConfigError,
   providerHeadersConfigError,
+  providerQuotaQueryConfigError,
   reasoningSummaryDeliveryRecordConfigError,
   upstreamHttpVersionConfigError,
 } from "./config/provider-validation";

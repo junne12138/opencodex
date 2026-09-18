@@ -524,6 +524,7 @@
   "cursor-toolresult-normalize.test.ts": "providers/cursor", "cursor-transport-retry.test.ts": "providers/cursor",
   "cursor-ultra-mode.test.ts": "providers/cursor", "cursor-umbrella-rows.test.ts": "providers/cursor",
   "cursor-uncallable-quarantine.test.ts": "providers/cursor", "cursor-vision-wire-harness.test.ts": "providers/cursor",
+  "custom-quota.test.ts": "providers",
   "custom-model-catalog-migration.test.ts": "codex-integration", "custom-tool-compat.test.ts": "responses",
   "cyber-policy-error-fidelity.test.ts": "providers", "dashboard-sidecar-codex-write.test.ts": "gui",
   "dashboard-uptime.test.ts": "gui", "data-plane-admission-identity.test.ts": "server",

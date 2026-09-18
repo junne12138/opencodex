@@ -1401,6 +1401,62 @@ Google Antigravity, OpenCode Go, OpenRouter, DeepSeek, ClinePass, Z.AI, MiniMax,
 Moonshot, Venice, Synthetic, DeepInfra, Neuralwatt, Command Code, and any a6api-backed
 custom provider.
 
+### Custom quota queries
+
+A custom provider can map a JSON usage endpoint into the same quota report. The query URL must be
+HTTPS and use the same origin as that provider's `baseUrl`. OpenCodex rejects redirects, bounds the
+credential file and response size, and never accepts inline secret header values. Put secrets in an
+environment variable or a local JSON credential file, then refer to them by name.
+
+This Compass example reads a dedicated local credential file without copying its cookie or project
+id into `config.json`:
+
+```json
+{
+  "providers": {
+    "compass": {
+      "adapter": "anthropic",
+      "baseUrl": "https://compass.llm.shopee.io/compass-api/v1",
+      "quotaQuery": {
+        "url": "https://compass.llm.shopee.io/api/v1/cqp/ccswitch/monthly_usage",
+        "method": "POST",
+        "credentialsFile": "~/.opencodex/compass-quota-auth.json",
+        "headers": {
+          "Cookie": { "$credential": "sso_session_cookie" }
+        },
+        "body": {
+          "project_id": { "$credential": "project_id" }
+        },
+        "response": {
+          "root": "data",
+          "limit": "total_amount",
+          "used": "usage",
+          "remaining": "balance"
+        },
+        "window": "monthly",
+        "unit": "usd",
+        "label": "Compass monthly"
+      }
+    }
+  }
+}
+```
+
+`credentialsFile` must be absolute or start with `~/`; it must contain one JSON object, be no
+larger than 64 KiB, and on Unix be accessible only to its owner. A `{"$credential":"a.b"}` reference reads a scalar through a dot path. Use
+`{"$env":"QUOTA_TOKEN"}` in a header or body field to read an environment variable instead. POST
+bodies are flat JSON objects; literal string, number, boolean, and null values are allowed only in
+the body. Query strings and fragments are rejected so credentials cannot be persisted in the URL.
+
+The `response` object can map `percent` directly, or map `limit` plus either `used` or `remaining`;
+OpenCodex derives the missing amount and consumed percentage. Set `window` to `five-hour`, `weekly`,
+`monthly`, or `custom`. A custom window uses `label`. `unit: "usd"` also publishes the absolute
+credit values. `resetAt` accepts the same timestamp formats as built-in quota readers. The optional
+`timeoutMs` range is 1,000–30,000 ms and defaults to 8,000 ms.
+
+After editing the provider config, run `ocx config validate` and then
+`ocx provider quota --refresh` to check the Compass row in the mapped result.
+
 **OpenCode Go quota.** The canonical `opencode-go` preset reads
 `GET https://opencode.ai/zen/go/v1/usage` with the configured key as a Bearer token and
 does not follow redirects. The response's rolling, weekly, and monthly `percent` values are
