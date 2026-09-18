@@ -341,6 +341,12 @@ bulk-pause and recovery suites `tests/codex-integration/codex-routing.test.ts`,
 
 ### Quota cache and short-window history
 
+Business pool accounts use `backend-api/codex/usage`, whose
+`spend_control.individual_limit` describes the effective monthly workspace credit allowance.
+`src/codex/quota.ts` preserves that allowance as a quantified custom window for account cards;
+the ordinary `credits.balance` field may be null even when the spend-control limit exists.
+Non-Business plans continue to use `backend-api/wham/usage`.
+
 `src/codex/quota.ts` drops an omitted account-level short tuple from the display/rotation
 cache when its stored reset instant has elapsed. Seconds and milliseconds are accepted;
 future or missing deadlines remain carried, and explicit incoming short readings remain stored.

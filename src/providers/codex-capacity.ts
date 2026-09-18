@@ -49,7 +49,15 @@ export type CodexCapacityQuota = {
   weeklyResetAt?: number;
   monthlyPercent?: number;
   monthlyResetAt?: number;
-  customWindows?: Array<{ label: string; percent: number; resetAt?: number }>;
+  customWindows?: Array<{
+    label: string;
+    percent: number;
+    resetAt?: number;
+    limit?: number;
+    used?: number;
+    remaining?: number;
+    unit?: string;
+  }>;
   updatedAt: number;
 };
 

@@ -65,10 +65,11 @@ export async function fetchCodexUsage<T>(
   init: RequestInit,
   onDispatch?: () => void,
   schedule: CodexUsageSchedule = {},
+  usageUrl = "https://chatgpt.com/backend-api/wham/usage",
 ): Promise<CodexUsageRead<T> | null> {
   if (schedule.unpaced) {
     onDispatch?.();
-    const response = await fetch("https://chatgpt.com/backend-api/wham/usage", init);
+    const response = await fetch(usageUrl, init);
     return { kind: "owner", response, settle: () => {} };
   }
   const pacingKey = scopedKey(schedule.pacingKey ?? baseQueryKey(key));
@@ -134,7 +135,7 @@ export async function fetchCodexUsage<T>(
   };
   try {
     onDispatch?.();
-    response = await fetch("https://chatgpt.com/backend-api/wham/usage", init);
+    response = await fetch(usageUrl, init);
     return { kind: "owner", response, settle };
   } catch (error) {
     settle(false);

@@ -132,3 +132,26 @@ test("custom provider quota remains visible when the active key has no account-s
   expect(markup).toContain("US$140.00");
   expect(markup).not.toContain("Quota lookup is not supported for this account.");
 });
+
+test("Business spend-control credits show percentage and remaining allowance", () => {
+  const markup = render(<ProviderCurrentQuota report={{
+    quota: {
+      customWindows: [{
+        label: "Business monthly credits",
+        percent: 27,
+        resetAt: 1790812801,
+        limit: 10000,
+        used: 2714.826745033264,
+        remaining: 7285.173254966736,
+        unit: "credit",
+      }],
+      updatedAt: observedAt,
+    },
+    updatedAt: observedAt,
+  }} />);
+
+  expect(markup).toContain("Business monthly credits");
+  expect(markup).toContain("27% used");
+  expect(markup).toContain("7,285.17");
+  expect(markup).toContain("10,000");
+});

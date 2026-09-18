@@ -2666,6 +2666,7 @@ export const de: Record<TKey, string> = {
   "quota.cursorFirstParty": "Erstanbieter-Modelle",
   "quota.cursorApiUsage": "API-Nutzung",
   "quota.totalSubscriptionCredits": "Gesamtes Abo-Guthaben",
+  "quota.businessMonthlyCredits": "Monatliche Business-Credits",
   "quota.creditsBalance": "Guthabenstand",
   "quota.creditsPeriodEnds": "Abrechnungszeitraum endet am {date}",
   "quota.usedPercent": "{pct} % genutzt",

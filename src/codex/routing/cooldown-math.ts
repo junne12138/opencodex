@@ -2,6 +2,7 @@ import {
   CODEX_EXHAUSTED_USAGE_PERCENT,
   CODEX_UNKNOWN_USAGE_SCORE,
 } from "../quota";
+import { businessCreditUsagePercent } from "../business-workspace-quota";
 import { isThirtyDayOnlyCodexPlan } from "../plan";
 import { hasSpendableCodexCredits, isTerminalShortWindow, type CodexSpendableCredits } from "../quota-types";
 import type { CodexQuotaScope } from "./health-store";
@@ -107,13 +108,15 @@ export function computeCodexUsageScore(quota: {
   shortPercent?: number;
   shortResetAt?: number;
   shortObservedAt?: number;
+  customWindows?: Array<{ label: string; percent: number }>;
   credits?: CodexSpendableCredits | null;
 } | null, plan?: unknown, now: number = Date.now(), allowCredits = false): number {
   if (!quota) return CODEX_UNKNOWN_USAGE_SCORE;
   const finite = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value);
+  const businessCredits = businessCreditUsagePercent(quota);
   const longWindows = isThirtyDayOnlyCodexPlan(plan)
-    ? [quota.monthlyPercent]
-    : [quota.weeklyPercent, quota.monthlyPercent];
+    ? [quota.monthlyPercent, businessCredits]
+    : [quota.weeklyPercent, quota.monthlyPercent, businessCredits];
   const knownLong = longWindows.filter(finite);
   // The short burst window only REFINES a known long-window position; it cannot stand in for
   // one. A snapshot carrying just `shortPercent: 0` would otherwise score a flat 0 and make an

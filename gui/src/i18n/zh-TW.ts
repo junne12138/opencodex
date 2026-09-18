@@ -1268,6 +1268,7 @@ export const zhTW: Record<TKey, string> = {
   "quota.cursorFirstParty": "官方模型",
   "quota.cursorApiUsage": "API 用量",
   "quota.totalSubscriptionCredits": "訂閱總額度",
+  "quota.businessMonthlyCredits": "Business 月度額度",
   "quota.creditsBalance": "額度餘額",
   "quota.creditsPeriodEnds": "帳單週期結束於 {date}",
   "quota.usedPercent": "已用 {pct}%",

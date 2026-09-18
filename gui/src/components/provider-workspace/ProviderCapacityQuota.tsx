@@ -14,6 +14,7 @@ import {
 } from "../../provider-workspace/report";
 import { type QuotaWindowKey } from "../QuotaBars";
 import QuotaBars from "../QuotaBars";
+import { businessCreditWindow } from "../../business-workspace-quota";
 
 function bcp47(locale: Locale): string {
   switch (locale) {
@@ -51,6 +52,12 @@ export function ProviderCapacityQuota({ report, pending }: { report: ProviderQuo
   // Only a passively observed row carries this; see ProviderUsage for the same rule.
   const observedAt = observedAtFromReport(report);
   const credits = primaryQuota?.creditsUsd;
+  const businessCredits = businessCreditWindow(primaryQuota);
+  const businessCreditBalance = businessCredits
+    && typeof businessCredits.limit === "number" && Number.isFinite(businessCredits.limit)
+    && typeof businessCredits.remaining === "number" && Number.isFinite(businessCredits.remaining)
+    ? businessCredits
+    : null;
   const showsAggregate = aggregation?.presentation === "aggregate";
   const incompleteWindowKeys = new Set<QuotaWindowKey>();
   const incompleteCustomWindowLabels = new Set<string>();
@@ -81,6 +88,9 @@ export function ProviderCapacityQuota({ report, pending }: { report: ProviderQuo
     style: "currency",
     currency: "USD",
   }).format(value);
+  const formatCreditAmount = (value: number) => new Intl.NumberFormat(localeTag, {
+    maximumFractionDigits: 2,
+  }).format(value);
   const formatPeriodEnd = (value: number) => {
     const date = asDate(value);
     return date === null ? null : new Intl.DateTimeFormat(localeTag, { dateStyle: "medium" }).format(date);
@@ -102,12 +112,18 @@ export function ProviderCapacityQuota({ report, pending }: { report: ProviderQuo
           incompleteCustomWindowLabels={showsAggregate ? incompleteCustomWindowLabels : undefined}
         />
       )}
-      {(credits || aggregation) && (
+      {(credits || businessCreditBalance || aggregation) && (
         <div className="pws-capacity-details">
           {credits && (
             <div className="pws-capacity-recovery">
               <span>{t("quota.creditsBalance")}</span>
               <strong>{formatCredits(credits.remaining)}</strong>
+            </div>
+          )}
+          {businessCreditBalance && (
+            <div className="pws-capacity-recovery">
+              <span>{t("quota.creditsBalance")}</span>
+              <strong>{formatCreditAmount(businessCreditBalance.remaining!)} / {formatCreditAmount(businessCreditBalance.limit!)}</strong>
             </div>
           )}
           {periodEnd !== null && (

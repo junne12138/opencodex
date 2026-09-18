@@ -1582,6 +1582,7 @@ export const tr: Record<TKey, string> = {
   "quota.cursorFirstParty": "Birinci taraf modeller",
   "quota.cursorApiUsage": "API kullanımı",
   "quota.totalSubscriptionCredits": "Toplam abonelik kredileri",
+  "quota.businessMonthlyCredits": "Aylık Business kredileri",
   "quota.creditsBalance": "Kredi bakiyesi",
   "quota.creditsPeriodEnds": "Faturalandırma dönemi {date} tarihinde sona erer",
   "quota.usedPercent": "%{pct} kullanıldı",

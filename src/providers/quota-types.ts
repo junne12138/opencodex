@@ -34,6 +34,10 @@ export interface ProviderQuotaWindow {
   passiveObservedAt?: number;
   /** Upstream refusal evidence, distinct from a measured utilization counter. */
   rejected?: true;
+  limit?: number;
+  used?: number;
+  remaining?: number;
+  unit?: string;
 }
 
 export interface ProviderQuotaCreditsUsd {

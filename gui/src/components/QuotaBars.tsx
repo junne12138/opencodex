@@ -3,6 +3,7 @@ import type { Locale, TFn } from "../i18n/shared";
 import { useI18n } from "../i18n/shared";
 import { IconAlert } from "../icons";
 import { type AccountQuota, normalizeQuotaForPlan } from "../codex-quota-utils";
+import { BUSINESS_MONTHLY_CREDITS_LABEL } from "../business-workspace-quota";
 
 /* Helpers are co-located with QuotaBars for overview sorting / stacked layout. */
 /* eslint-disable react-refresh/only-export-components */
@@ -60,6 +61,8 @@ function localizeCustomQuotaLabel(rawLabel: string, t: TFn): string {
       return t("quota.cursorApiUsage");
     case "Total subscription credits":
       return t("quota.totalSubscriptionCredits");
+    case BUSINESS_MONTHLY_CREDITS_LABEL:
+      return t("quota.businessMonthlyCredits");
     default:
       return rawLabel;
   }

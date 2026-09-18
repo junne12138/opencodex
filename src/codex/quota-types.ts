@@ -104,7 +104,15 @@ export type StoredAccountQuota = {
   /** Local short-usage observation time; partial/credit updates do not refresh it. */
   shortObservedAt?: number;
   shortWindowSeconds?: number;
-  customWindows?: Array<{ label: string; percent: number; resetAt?: number }>;
+  customWindows?: Array<{
+    label: string;
+    percent: number;
+    resetAt?: number;
+    limit?: number;
+    used?: number;
+    remaining?: number;
+    unit?: string;
+  }>;
   resetCredits?: number;
   /** Spendable usage credits; resetCredits are separate, manually redeemed reset tickets. */
   credits?: CodexSpendableCredits | null;
@@ -141,7 +149,7 @@ export type WhamUsageResponse = {
     primary_window?: WhamUsageWindow | null;
     secondary_window?: WhamUsageWindow | null;
     tertiary_window?: WhamUsageWindow | null;
-  };
+  } | null;
   credits?: {
     has_credits?: unknown;
     unlimited?: unknown;

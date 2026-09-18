@@ -14,7 +14,7 @@ import { CodexQuotaHistory, QUOTA_HISTORY_LIMITS, type QuotaHistoryWindow } from
 import { isPoolQuotaWriterLive, poolQuotaHistoryIdentity } from "./account-store";
 import { CODEX_EXHAUSTED_USAGE_PERCENT, MAIN_ACCOUNT_HARD_LOCK_MIN_PERCENT, hasSpendableCodexCredits, resetAtToMs } from "./quota-types";
 import type { PoolQuotaWriter, StoredAccountQuota, WhamUsageResponse, WhamUsageWindow } from "./quota-types";
-
+import { businessCreditUsagePercent, parseBusinessCreditWindow } from "./business-workspace-quota";
 export type { StoredAccountQuota, WhamUsageResponse } from "./quota-types";
 export { CODEX_EXHAUSTED_USAGE_PERCENT } from "./quota-types";
 
@@ -84,7 +84,7 @@ function mayCommitAccountQuota(accountId: string, writerGeneration: number): boo
 // actually exhausted account is still eligible for threshold rotation.
 export const CODEX_UNKNOWN_USAGE_SCORE = 101;
 export function isCodexQuotaExhausted(
-  quota: Pick<StoredAccountQuota, "weeklyPercent" | "monthlyPercent" | "shortPercent" | "credits"> | null,
+  quota: Pick<StoredAccountQuota, "weeklyPercent" | "monthlyPercent" | "shortPercent" | "credits" | "customWindows"> | null,
   plan?: unknown,
   allowCredits = false,
 ): boolean {
@@ -94,8 +94,8 @@ export function isCodexQuotaExhausted(
   // account at 100% there is blocked regardless of which longer window governs its plan;
   // omitting it would route traffic straight into a 429 (#1791).
   const values = codexQuotaWindowForPlan(plan) === "monthly"
-    ? [quota.monthlyPercent, quota.shortPercent]
-    : [quota.weeklyPercent, quota.monthlyPercent, quota.shortPercent];
+    ? [quota.monthlyPercent, quota.shortPercent, businessCreditUsagePercent(quota)]
+    : [quota.weeklyPercent, quota.monthlyPercent, quota.shortPercent, businessCreditUsagePercent(quota)];
   return values.some(value => typeof value === "number"
     && Number.isFinite(value)
     && value >= CODEX_EXHAUSTED_USAGE_PERCENT);
@@ -121,11 +121,12 @@ export function codexQuotaWindowForPlan(plan?: unknown): "monthly" | "weekly" {
 }
 
 export function isCompleteCodexQuotaRecoverySnapshot(
-  quota: Pick<StoredAccountQuota, "weeklyPercent" | "monthlyPercent" | "monthlyIsPrimaryWindow" | "shortPercent" | "credits"> | null,
+  quota: Pick<StoredAccountQuota, "weeklyPercent" | "monthlyPercent" | "monthlyIsPrimaryWindow" | "shortPercent" | "credits" | "customWindows"> | null,
   plan?: unknown,
   allowCredits = false,
 ): boolean {
   if (!quota || isCodexQuotaExhausted(quota, plan, allowCredits)) return false;
+  if (finitePercent(businessCreditUsagePercent(quota))) return true;
   // Recovery still fails closed on MISSING EVIDENCE — a credits-only or windowless payload
   // carries no usage reading at all and must never clear a cooldown. What it does not do is
   // fail closed on an unfamiliar plan NAME, which only ever meant "cooled forever".
@@ -920,6 +921,7 @@ export function parseUsageQuota(data: WhamUsageResponse): Omit<StoredAccountQuot
   const resetCredits = typeof data.rate_limit_reset_credits?.available_count === "number"
     ? data.rate_limit_reset_credits.available_count
     : undefined;
+  const spendWindow = parseBusinessCreditWindow(data.spend_control);
 
   const quota: Omit<StoredAccountQuota, "updatedAt"> = {};
   const creditsAllowed = spendControlAllowsCredits(data.spend_control);
@@ -941,7 +943,12 @@ export function parseUsageQuota(data: WhamUsageResponse): Omit<StoredAccountQuot
       };
     }
   } else if (data.rate_limit?.allowed === false || creditsAllowed === false) quota.credits = null;
-  if (!data.rate_limit) return snapshotHasCredits(quota) ? quota : null;
+  if (!data.rate_limit) {
+    if (data.additional_rate_limits?.length) return parseUsageQuota({ ...data, rate_limit: {} });
+    if (spendWindow) quota.customWindows = [spendWindow];
+    if (resetCredits !== undefined) quota.resetCredits = resetCredits;
+    return snapshotHasCredits(quota) || spendWindow || resetCredits !== undefined ? quota : null;
+  }
   const thirtyDayOnly = codexQuotaWindowForPlan(data.plan_type) === "monthly";
   const primaryWindow = data.rate_limit.primary_window;
   const secondaryWindow = data.rate_limit.secondary_window;
@@ -1000,6 +1007,7 @@ export function parseUsageQuota(data: WhamUsageResponse): Omit<StoredAccountQuot
   // A supplementary value (including fallback from an unreadable primary) is not proof.
   if (primaryIsMonthly && primaryPercent !== undefined) quota.monthlyIsPrimaryWindow = true;
 
+  if (spendWindow) quota.customWindows = [spendWindow];
   if (resetCredits !== undefined) quota.resetCredits = resetCredits;
 
   return hasKnownQuotaValue(quota) || snapshotHasCredits(quota) ? quota : null;

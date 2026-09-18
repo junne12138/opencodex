@@ -16,6 +16,7 @@ import { claimQuotaRecovery, fencePropagatedQuotaRecovery, quotaRecoveryTerminal
 import { seedLoginRowsForTests } from "./login-state";
 import { nonEmptyPlan } from "./runtime-config";
 import { CODEX_TERMINAL_AUTH_CODES } from "../quota-refresh-outcome";
+import { codexQuotaUsageUrl } from "../business-workspace-quota";
 
 export const POOL_CACHE_TTL = 5 * 60_000;
 export const POOL_QUOTA_REFRESH_CONCURRENCY = 4;
@@ -265,7 +266,7 @@ export async function recoverPoolQuotaFrom401(ctx: {
     signal: AbortSignal.timeout(WHAM_REQUEST_TIMEOUT_MS),
   }, () => markQuotaProbeAttempted(ctx.quotaProbeEvidence, refreshed.generation),
   ctx.recoveryProbeNow === undefined ? { poolAccountId: accountId }
-    : { poolAccountId: accountId, recoveryProbe: true, now: () => ctx.recoveryProbeNow! });
+    : { poolAccountId: accountId, recoveryProbe: true, now: () => ctx.recoveryProbeNow! }, codexQuotaUsageUrl(configuredPlan));
   if (!replayRead) return { quota: existing ?? null, needsReauth: false, credentialGeneration: refreshed.generation, quotaProbeSkipped: true };
   if (replayRead.kind === "joined") {
     if (!isCodexAccountGenerationLive(accountId, refreshed.generation)
@@ -409,7 +410,7 @@ export async function fetchFreshPoolAccountQuota(
         signal: AbortSignal.timeout(8000),
       }, () => markQuotaProbeAttempted(quotaProbeEvidence, generation),
       recoveryProbeNow === undefined ? { poolAccountId: accountId }
-        : { poolAccountId: accountId, recoveryProbe: true, now: () => recoveryProbeNow });
+        : { poolAccountId: accountId, recoveryProbe: true, now: () => recoveryProbeNow }, codexQuotaUsageUrl(configuredPlan));
       if (!admission) return { quota: existing ?? null, needsReauth: false, credentialGeneration: generation, quotaProbeSkipped: true };
       if (admission.kind === "joined") return isCodexAccountGenerationLive(accountId, generation)
         && quotaProbeEvidence.mayPublish?.() !== false

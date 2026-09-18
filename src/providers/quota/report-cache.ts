@@ -162,7 +162,15 @@ function quotaSignatureValue(quota: CodexCapacityQuota | null): unknown {
     monthlyResetAt: quota.monthlyResetAt,
     updatedAt: quota.updatedAt,
     customWindows: [...(quota.customWindows ?? [])]
-      .map(window => ({ label: window.label, percent: window.percent, resetAt: window.resetAt }))
+      .map(window => ({
+        label: window.label,
+        percent: window.percent,
+        resetAt: window.resetAt,
+        limit: window.limit,
+        used: window.used,
+        remaining: window.remaining,
+        unit: window.unit,
+      }))
       .sort((a, b) => a.label.localeCompare(b.label)),
   };
 }

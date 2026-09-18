@@ -555,6 +555,10 @@ discovery, and configured-port-only legacy proxies must be restarted before they
 
 The `kimi-responses` preset shares Kimi's icon and display brand while its provider id remains distinct.
 
+Business pool accounts read `backend-api/codex/usage` instead of the legacy WHAM surface so
+workspace `spend_control.individual_limit` is retained as a monthly credit window, including
+its used, remaining, total, and reset values. Other plans keep the WHAM request path.
+
 The dashboard's auto-switch route accepts `{ threshold }` for the global value and `{ id, threshold }`
 for an account override. Account thresholds are integers 0..100 or `null` to inherit, and account-list
 DTOs always expose `autoSwitchThresholdOverride` as that integer or `null`; account controls are

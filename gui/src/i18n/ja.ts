@@ -1479,6 +1479,7 @@ export const ja: Record<TKey, string> = {
   "quota.cursorFirstParty": "ファーストパーティモデル",
   "quota.cursorApiUsage": "API 使用量",
   "quota.totalSubscriptionCredits": "サブスクリプションクレジット合計",
+  "quota.businessMonthlyCredits": "Business 月間クレジット",
   "quota.creditsBalance": "クレジット残高",
   "quota.creditsPeriodEnds": "請求期間終了日: {date}",
   "quota.usedPercent": "{pct}% 使用",

@@ -44,6 +44,36 @@ describe("rate-limit reset credits", () => {
       expect(quota!.weeklyPercent).toBeUndefined();
     });
 
+    it("maps Business spend controls to a monthly credit allowance", () => {
+      const quota = parseUsageQuota({
+        plan_type: "business",
+        rate_limit: null,
+        spend_control: {
+          reached: false,
+          individual_limit: {
+            source: "group_based_spend_controls",
+            unit: "credit",
+            limit: "10000",
+            used: "2714.826745033264",
+            remaining: "7285.173254966736",
+            used_percent: 27,
+            remaining_percent: 73,
+            reset_at: 1790812801,
+          },
+        },
+      });
+
+      expect(quota?.customWindows).toEqual([{
+        label: "Business monthly credits",
+        percent: 27,
+        resetAt: 1790812801,
+        limit: 10000,
+        used: 2714.826745033264,
+        remaining: 7285.173254966736,
+        unit: "credit",
+      }]);
+    });
+
     it("returns null when neither rate_limit nor credits exist", () => {
       const data: WhamUsageResponse = {};
       expect(parseUsageQuota(data)).toBeNull();
