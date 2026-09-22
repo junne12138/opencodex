@@ -102,6 +102,7 @@ describe("custom provider quota", () => {
         Accept: "application/json",
         Cookie: "session-fixture",
         "Content-Type": "application/json",
+        "User-Agent": "opencodex",
       },
       body: JSON.stringify({ project_id: "project-fixture" }),
     }]);

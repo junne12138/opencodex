@@ -44,8 +44,8 @@ function record(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-export function codexQuotaUsageUrl(configuredPlan: string | undefined): string {
-  return configuredPlan?.trim().toLowerCase().includes("business")
+export function codexQuotaUsageUrl(configuredPlan: unknown): string {
+  return typeof configuredPlan === "string" && configuredPlan.trim().toLowerCase().includes("business")
     ? BUSINESS_USAGE_URL
     : DEFAULT_USAGE_URL;
 }
