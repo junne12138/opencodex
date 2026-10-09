@@ -1,5 +1,4 @@
 # GUI And Management API
-
 Anthropic OAuth account DTOs include `autoSwitchThresholdOverride` (integer or null),
 `autoSwitchThreshold` (pool default) and `effectiveAutoSwitchThreshold`. The dedicated
 `PUT /api/oauth/accounts/auto-switch` accepts `{ provider: "anthropic", accountId, threshold }`;
@@ -11,7 +10,6 @@ focus/draft semantics and translated copy. The hook protects same-provider selec
 and stale roster reads; confirmed pool-setting changes seed new overrides immediately, without
 overwriting an existing custom draft. Old servers do not show a synthetic control. See
 [Anthropic threshold semantics](providers/anthropic-account-thresholds.md). Connection probes use the [discovery credential ownership contract](providers/anthropic-account-pool.md#discovery-credential-ownership), including a live check before sending.
-
 Anthropic account rows now expose the shared boolean `paused` DTO and use the existing
 `PUT /api/oauth/accounts/pause` body `{ provider, accountId, paused }`. The dashboard's
 `ProviderAuthPanel` and `useProviderAccountPools` reuse the translated pause/resume actions,
@@ -555,9 +553,7 @@ discovery, and configured-port-only legacy proxies must be restarted before they
 
 The `kimi-responses` preset shares Kimi's icon and display brand while its provider id remains distinct.
 
-Business pool accounts read `backend-api/codex/usage` instead of the legacy WHAM surface so
-workspace `spend_control.individual_limit` is retained as a monthly credit window, including
-its used, remaining, total, and reset values. Other plans keep the WHAM request path.
+Business pool accounts use `backend-api/codex/usage` through the shared quota-query pacing and backoff in `src/codex/quota-query-backoff.ts`, preserving `spend_control.individual_limit` as a monthly credit window with used, remaining, total, and reset values. Other plans keep the WHAM request path.
 
 The dashboard's auto-switch route accepts `{ threshold }` for the global value and `{ id, threshold }`
 for an account override. Account thresholds are integers 0..100 or `null` to inherit, and account-list

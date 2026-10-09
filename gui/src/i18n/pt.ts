@@ -6,6 +6,8 @@ import type { TKey } from "./en";
  * Technical terms and model identifiers intentionally remain English.
  */
 export const pt: Record<TKey, string> = {
+  "quota.businessMonthlyCredits": "Créditos mensais Business",
+  "pws.providerQuota": "Cota do provedor",
   "sidecar.pool": "Pool de contas",
   "sidecar.poolCurrent": "Pool da solicitação atual",
   "sidecar.poolA": "Anthropic",

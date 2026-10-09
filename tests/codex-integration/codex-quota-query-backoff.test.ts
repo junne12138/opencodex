@@ -207,3 +207,20 @@ test("a full cache never evicts an active read", async () => {
   expect((await fetchCodexUsage("active", {}))?.kind).toBe("owner");
   expect(calls).toBe(258);
 });
+
+
+test("Business usage keeps its endpoint and honors shared Retry-After pacing", async () => {
+  const urls: string[] = [];
+  globalThis.fetch = Object.assign(async (input: string | URL | Request) => {
+    urls.push(input instanceof Request ? input.url : String(input));
+    return new Response("{}", { status: 429, headers: { "Retry-After": "900" } });
+  }, { preconnect: originalFetch.preconnect });
+  await fetchPoolAccountQuota("backoff-pool", true, "business");
+  now += 30_000;
+  const blocked = await fetchPoolAccountQuota("backoff-pool", true, "business");
+  expect(blocked.quotaProbeSkipped).toBe(true);
+  expect(urls).toEqual(["https://chatgpt.com/backend-api/codex/usage"]);
+  now += 870_000;
+  await fetchPoolAccountQuota("backoff-pool", true, "business");
+  expect(urls).toEqual(Array(2).fill("https://chatgpt.com/backend-api/codex/usage"));
+});
