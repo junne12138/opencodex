@@ -165,6 +165,48 @@ pub fn provider(source: &Source, body: Option<&Value>, unavailable: bool) -> Val
     row
 }
 
+/// Provider reports are a separate display scope, never a measurement of a roster key.
+/// Preserve working account windows; custom queries may additionally report a shared balance.
+pub fn apply_provider_quota(row: &mut Value, report: &Value) {
+    if row["id"].as_str().is_none() || row["id"] != report["provider"] {
+        return;
+    }
+    let has_account_windows = row["accounts"].as_array().is_some_and(|accounts| {
+        accounts.iter().any(|account| {
+            account["unavailable"] != true
+                && account["windows"]
+                    .as_array()
+                    .is_some_and(|windows| !windows.is_empty())
+        })
+    });
+    if has_account_windows && text(report, "source") != "custom:quota-query" {
+        return;
+    }
+    let Some(quota) = report.get("quota").filter(|quota| quota.is_object()) else {
+        return;
+    };
+    let mut rows = windows(quota, "");
+    if let Some(remaining) = number(&quota["creditsUsd"]["remaining"]) {
+        let credits = json!({
+            "remaining": remaining,
+            "limit": number(&quota["creditsUsd"]["limit"]).filter(|limit| *limit > 0.0),
+            "used": number(&quota["creditsUsd"]["used"]),
+            "percent": number(&quota["creditsUsd"]["percent"])
+        });
+        // Only a single matching window unambiguously carries this currency reading.
+        // Otherwise keep it in its own row instead of attributing it to another limit.
+        if rows.len() == 1 && rows[0]["percent"] == credits["percent"] {
+            rows[0]["creditsUsd"] = credits;
+        } else {
+            rows.push(json!({"id":"provider-balance","label":"Balance",
+                "percent":credits["percent"],"resetAt":null,"creditsUsd":credits}));
+        }
+    }
+    if !rows.is_empty() {
+        row["quotaWindows"] = json!(rows);
+    }
+}
+
 fn parse_accounts(body: &Value) -> Option<Vec<Value>> {
     let rows = body
         .get("accounts")
@@ -230,6 +272,81 @@ fn exhausted(quota: &Value, plan: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn provider_balance_is_independent_of_key_roster_and_preserves_zero() {
+        let source = Source {
+            name: "compass".into(),
+            label: "Compass".into(),
+            path: None,
+            switch: None,
+        };
+        let mut row = provider(&source, None, false);
+        apply_provider_quota(
+            &mut row,
+            &json!({"provider":"compass","quota":{
+            "creditsUsd":{"remaining":0,"limit":100,"used":100,"percent":100},
+            "apiKey":"must-not-copy"}}),
+        );
+        assert_eq!(row["accounts"], json!([]));
+        assert_eq!(row["quotaWindows"][0]["creditsUsd"]["remaining"], 0.0);
+        assert_eq!(row["quotaWindows"][0]["percent"], 100.0);
+        assert!(!row.to_string().contains("must-not-copy"));
+    }
+
+    #[test]
+    fn provider_quota_does_not_override_account_measurements_or_cross_provider_identity() {
+        let source = Source {
+            name: "compass".into(),
+            label: "Compass".into(),
+            path: None,
+            switch: None,
+        };
+        let mut row = provider(
+            &source,
+            Some(&json!({"keys":[{"id":"a","quota":{"weeklyPercent":30}}]})),
+            false,
+        );
+        let original = row.clone();
+        apply_provider_quota(
+            &mut row,
+            &json!({"provider":"other","quota":{"monthlyPercent":50}}),
+        );
+        assert_eq!(row, original);
+        apply_provider_quota(
+            &mut row,
+            &json!({"provider":"compass","quota":{"monthlyPercent":50}}),
+        );
+        assert_eq!(row, original);
+        apply_provider_quota(
+            &mut row,
+            &json!({"provider":"compass","source":"custom:quota-query",
+            "quota":{"monthlyPercent":50}}),
+        );
+        assert_eq!(row["accounts"], original["accounts"]);
+        assert_eq!(row["quotaWindows"][0]["percent"], 50.0);
+    }
+
+    #[test]
+    fn missing_or_invalid_provider_reports_do_not_invent_quota_data() {
+        let source = Source {
+            name: "compass".into(),
+            label: "Compass".into(),
+            path: None,
+            switch: None,
+        };
+        for quota in [
+            json!(null),
+            json!({}),
+            json!({"creditsUsd":{"remaining":-1}}),
+            json!({"creditsUsd":{"remaining":"37.5"}}),
+        ] {
+            let mut row = provider(&source, None, true);
+            let original = row.clone();
+            apply_provider_quota(&mut row, &json!({"provider":"compass","quota":quota}));
+            assert_eq!(row, original);
+        }
+    }
+
     #[test]
     fn source_routes_are_encoded_and_never_forward_credentials() {
         let rows = sources(&json!({"providers":{

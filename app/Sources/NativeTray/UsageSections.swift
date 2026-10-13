@@ -5,6 +5,7 @@ struct NativeTrayProviderView: View {
     let provider: NativeTrayProvider
     var pendingSwitch: String? = nil
     var onUse: ((NativeTrayProvider.Account) -> Void)? = nil
+    private var providerWindows: [NativeTrayProvider.Window] { provider.quotaWindows ?? [] }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -12,9 +13,15 @@ struct NativeTrayProviderView: View {
                 NativeTrayProviderMark(provider: provider)
                 Text(provider.label).font(.subheadline.weight(.semibold))
             }
-            if provider.unavailable || provider.accounts.isEmpty {
+            if (provider.unavailable || provider.accounts.isEmpty) && providerWindows.isEmpty {
                 Text(provider.unavailable ? "Account limits unavailable" : "No quota data")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+            if !providerWindows.isEmpty {
+                Text("Provider quota").font(.caption2).foregroundStyle(.secondary)
+                ForEach(providerWindows) { window in
+                    NativeTrayQuotaWindowView(window: window)
+                }
             }
             ForEach(provider.accounts) { account in
                 VStack(alignment: .leading, spacing: 6) {
@@ -27,23 +34,36 @@ struct NativeTrayProviderView: View {
                     if let email = account.email, email != account.label {
                         Text(email).font(.caption2).foregroundStyle(.secondary)
                     }
-                    if account.unavailable || account.windows.isEmpty {
+                    if (account.unavailable || account.windows.isEmpty) && providerWindows.isEmpty {
                         Text("No quota data").font(.caption2).foregroundStyle(.secondary)
                     }
                     ForEach(account.windows) { window in
-                        HStack(spacing: 8) {
-                            Text(window.label).lineLimit(1).frame(width: 96, alignment: .leading)
-                            Text(NativeTrayFormat.percentText(window.value))
-                                .monospacedDigit().frame(width: 36, alignment: .trailing)
-                            NativeTrayQuotaBar(window: window)
-                            Text(NativeTrayFormat.reset(window.resetAt)).monospacedDigit()
-                                .frame(width: 70, alignment: .trailing)
-                                .help(window.resetDate?.formatted(date: .complete, time: .standard) ?? "Reset time unavailable")
-                        }.font(.caption2).foregroundStyle(.secondary)
+                        NativeTrayQuotaWindowView(window: window)
                     }
                 }
             }
         }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct NativeTrayQuotaWindowView: View {
+    let window: NativeTrayProvider.Window
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(window.label).lineLimit(1).frame(width: 96, alignment: .leading)
+                Text(NativeTrayFormat.percentText(window.value))
+                    .monospacedDigit().frame(width: 36, alignment: .trailing)
+                NativeTrayQuotaBar(window: window)
+                Text(NativeTrayFormat.reset(window.resetAt)).monospacedDigit()
+                    .frame(width: 70, alignment: .trailing)
+                    .help(window.resetDate?.formatted(date: .complete, time: .standard) ?? "Reset time unavailable")
+            }
+            if let balance = window.balanceText {
+                Text(balance).monospacedDigit().lineLimit(1)
+            }
+        }.font(.caption2).foregroundStyle(.secondary)
     }
 }
 

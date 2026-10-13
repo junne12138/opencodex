@@ -94,6 +94,8 @@ public struct NativeTrayProvider: Decodable, Identifiable {
     public let label: String
     public let unavailable: Bool
     public let accounts: [Account]
+    /// Provider-wide reports are independent of account/key-scoped measurements.
+    public let quotaWindows: [Window]?
     /// The provider's mark as SVG markup, and how to paint it (`image`, `mask`, `plate`,
     /// `dark-plate`). Both are optional: older hosts and unknown providers send neither.
     public let iconSvg: String?
@@ -123,13 +125,37 @@ public struct NativeTrayProvider: Decodable, Identifiable {
         public let label: String
         public let percent: Double?
         public let resetAt: Double?
+        public let creditsUsd: CreditsUsd?
         public var value: Double? { NativeTrayFormat.number(percent) }
         public var fill: Double { min(100, value ?? 0) / 100 }
         public var resetDate: Date? { NativeTrayFormat.date(resetAt) }
+        public var balanceText: String? {
+            guard let remaining = NativeTrayFormat.number(creditsUsd?.remaining) else { return nil }
+            let balance = "\(NativeTrayFormat.usd(remaining)) remaining"
+            guard let limit = NativeTrayFormat.number(creditsUsd?.limit), limit > 0 else { return balance }
+            return "\(balance) / \(NativeTrayFormat.usd(limit)) total"
+        }
+        public struct CreditsUsd: Decodable {
+            public let remaining: Double?
+            public let limit: Double?
+            public let used: Double?
+            public let percent: Double?
+        }
     }
 }
 
 public enum NativeTrayFormat {
+    public static func usd(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = Locale(identifier: "en_US")
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "USD"
+        formatter.currencySymbol = "$"
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? "—"
+    }
+
     public static func number(_ value: Double?) -> Double? {
         guard let value, value.isFinite, value >= 0 else { return nil }
         return value

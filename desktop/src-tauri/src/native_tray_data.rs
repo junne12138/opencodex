@@ -162,6 +162,40 @@ pub async fn load(
 }
 
 async fn load_providers(proxy: &ProxyClient, sources: Vec<accounts::Source>) -> Vec<Value> {
+    // Custom/key providers can expose provider-wide balances without a per-key reader.
+    // Read the shared report once, concurrently with rosters, within the same read budgets.
+    let needs_provider_quota = sources.iter().any(|source| {
+        source
+            .path
+            .as_ref()
+            .is_none_or(|path| path.starts_with("/api/providers/keys"))
+    });
+    let mut quota_tasks = JoinSet::new();
+    if needs_provider_quota {
+        let proxy = proxy.clone();
+        quota_tasks.spawn(async move {
+            bounded(proxy.quotas(), READ_BUDGET)
+                .await
+                .and_then(Result::ok)
+        });
+    }
+    let mut rows = load_accounts(proxy, sources).await;
+    let reports = quota_tasks.join_next().await.and_then(Result::ok).flatten();
+    if let Some(reports) = reports.as_ref().and_then(|body| body["reports"].as_array()) {
+        let reports: std::collections::HashMap<_, _> = reports
+            .iter()
+            .filter_map(|report| report["provider"].as_str().map(|name| (name, report)))
+            .collect();
+        for row in &mut rows {
+            if let Some(report) = row["id"].as_str().and_then(|name| reports.get(name)) {
+                accounts::apply_provider_quota(row, report);
+            }
+        }
+    }
+    rows
+}
+
+async fn load_accounts(proxy: &ProxyClient, sources: Vec<accounts::Source>) -> Vec<Value> {
     // Preserve successful rows at the deadline; untouched rows already say unavailable.
     let mut rows: Vec<_> = sources
         .iter()
@@ -215,6 +249,83 @@ async fn load_providers(proxy: &ProxyClient, sources: Vec<accounts::Source>) -> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn compass_provider_quota_is_visible_when_key_quota_is_unsupported() {
+        use crate::{auth::Auth, endpoint::ProxyEndpoint};
+        use std::{
+            io::{Read, Write},
+            net::{TcpListener, TcpStream},
+            sync::{
+                atomic::{AtomicBool, Ordering},
+                Arc,
+            },
+            thread,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let stop = Arc::new(AtomicBool::new(false));
+        let stopped = stop.clone();
+        let worker = thread::spawn(move || {
+            for connection in listener.incoming() {
+                if stopped.load(Ordering::Acquire) {
+                    break;
+                }
+                let mut stream = connection.unwrap();
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(2)))
+                    .unwrap();
+                let mut bytes = [0; 4096];
+                let count = stream.read(&mut bytes).unwrap();
+                let request = String::from_utf8_lossy(&bytes[..count]);
+                let path = request.split_whitespace().nth(1).unwrap_or("");
+                let body = if path == "/api/provider-quotas" {
+                    json!({"reports":[{"provider":"compass","source":"custom:quota-query","quota":{
+                        "monthlyPercent":62.5,
+                        "creditsUsd":{"limit":100,"used":62.5,"remaining":37.5,"percent":62.5}
+                    }}]})
+                } else {
+                    json!({"activeId":"key-a","keys":[{"id":"key-a","label":"Compass key",
+                        "quotaMode":"unsupported","quota":null}]})
+                }
+                .to_string();
+                let response = format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",body.len());
+                stream.write_all(response.as_bytes()).unwrap();
+            }
+        });
+        let proxy = ProxyClient::new(
+            ProxyEndpoint {
+                host: "127.0.0.1",
+                port,
+            },
+            Auth::new(std::env::temp_dir().join("compass-tray-fixture-no-credentials")),
+        )
+        .unwrap();
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let rows = runtime.block_on(load_providers(
+            &proxy,
+            accounts::sources(&json!({"providers":{
+                "compass":{"authMode":"key","hasApiKey":true}
+            }}))
+            .unwrap(),
+        ));
+        stop.store(true, Ordering::Release);
+        let _ = TcpStream::connect(("127.0.0.1", port));
+        worker.join().unwrap();
+        assert_eq!(rows[0]["accounts"][0]["windows"], json!([]));
+        assert_eq!(
+            rows[0]["quotaWindows"][0]["percent"], 62.5,
+            "The native panel must show provider-level Compass quota instead of No quota data"
+        );
+        assert_eq!(rows[0]["quotaWindows"][0]["creditsUsd"]["remaining"], 37.5);
+        assert!(
+            rows[0]["accounts"][0].get("creditsUsd").is_none(),
+            "Provider-level balances must not be attributed to an individual key"
+        );
+    }
+
     #[test]
     fn timeline_query_uses_canonical_settings_and_escapes_model_names() {
         let query = timeline_query(

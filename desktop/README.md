@@ -1,5 +1,9 @@
 # OpenCodex desktop shell
 
+The macOS menu-bar panel displays provider-level quota and USD balances for custom-query
+providers such as Compass even when no per-key quota reader exists. The provider quota appears
+separately from account limits; a missing reading remains unavailable rather than showing zero.
+
 The Tauri shell attaches to the local OpenCodex proxy and keeps the dashboard
 in the proxy's loopback origin. During development:
 

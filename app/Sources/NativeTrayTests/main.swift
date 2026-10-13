@@ -87,6 +87,20 @@ let marked = try decode(["providers": [["id": "openai", "label": "OpenAI", "unav
     "iconSvg": "<svg/>", "iconPaint": "mask"]]])
 check(marked.providers[0].iconPaint == "mask" && marked.providers[0].iconSvg == "<svg/>", "Mark fields decode")
 check(quotasOnly.providers[0].iconSvg == nil, "Providers without a mark still decode")
+check(quotasOnly.providers[0].quotaWindows == nil, "Older provider snapshots remain compatible")
+let compass = try decode(["providers": [["id": "compass", "label": "Compass", "unavailable": false,
+    "accounts": [], "quotaWindows": [["id": "monthly:0", "label": "30-day limit", "percent": 62.5,
+        "creditsUsd": ["remaining": 37.5, "limit": 100, "used": 62.5, "percent": 62.5]]]]]])
+let compassWindow = compass.providers[0].quotaWindows![0]
+check(compassWindow.balanceText == "$37.50 remaining / $100.00 total", "Provider balance is visible without per-key quotas")
+check(compassWindow.value == 62.5, "Provider quota retains its measured percentage")
+check(compass.providers[0].accounts.isEmpty, "Provider quota never fabricates an account")
+let zeroBalance = try decode(["providers": [["id": "compass", "label": "Compass", "unavailable": false,
+    "accounts": [], "quotaWindows": [["id": "balance", "label": "Balance", "creditsUsd": ["remaining": 0]]]]]])
+check(zeroBalance.providers[0].quotaWindows![0].balanceText == "$0.00 remaining", "Zero balance is a known measurement")
+let invalidBalance = try decode(["providers": [["id": "compass", "label": "Compass", "unavailable": false,
+    "accounts": [], "quotaWindows": [["id": "balance", "label": "Balance", "creditsUsd": ["remaining": -1]]]]]])
+check(invalidBalance.providers[0].quotaWindows![0].balanceText == nil, "Invalid balances stay unavailable")
 
 // Quota bars use the dashboard's severity thresholds and keep a spoken value.
 check(NativeTrayFormat.severity(69.9) == .normal && NativeTrayFormat.severity(70) == .warn, "Warn at 70%")

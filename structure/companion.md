@@ -60,6 +60,15 @@ rows (`desktop/src-tauri/src/widget.rs`, where a JSON `null` counts as absent) a
 same rule, so a weekly-only plan shows only its weekly row. An account that reports no window keeps
 the surface's "No quota data" line rather than a row of dashes.
 
+For key and forward providers, `desktop/src-tauri/src/native_tray_data.rs` also reads the
+provider quota report once alongside the account rosters, with an independent bounded read.
+`desktop/src-tauri/src/native_tray_accounts.rs` projects optional provider-level `quotaWindows`
+when account readers report no windows; a `custom:quota-query` report may coexist with account
+windows. These rows stay separate from key/account measurements and never create an account.
+The native panel models in `app/Sources/NativeTray/Models.swift` decode optional `creditsUsd`
+amounts, and `app/Sources/NativeTray/UsageSections.swift` displays the provider quota and remaining
+USD balance, including a measured zero. Missing reports retain the unavailable/no-data state.
+
 Native panel provider headers carry the dashboard's own marks. `desktop/src-tauri/src/provider_icons.rs`
 embeds the SVG files from `gui/public/provider-icons` and mirrors the alias table and paint modes of
 `gui/src/provider-icons.ts`; `gui/tests/provider-icons-native.test.ts` fails when they drift. The
