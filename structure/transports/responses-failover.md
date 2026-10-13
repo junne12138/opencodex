@@ -1,6 +1,6 @@
 # Responses Failover And Replay
 
- `src/server/responses/request-transport.ts` resolves the final Anthropic model ID once for each enabled-pool request and holds its model route through admission. The three account-refusal retry sites in `adapter-dispatch.ts`, `adapter-continuation.ts` and `sidecar-execution.ts` use the same route, keep the original refusal if no replacement exists inside it, and preserve existing send and output replay limits. A local cooldown returns 429 with the earliest known Retry-After among accounts the route can use when they recover; explicit fallback includes usable ordinary-pool accounts even when the saved route IDs have been removed, while a strict route stays route-scoped. Selection, refusal and 429-rotation logs use the rule’s 1-based `route:#<n>` position, never its name.
+ `src/server/responses/request-transport.ts` resolves the final Anthropic model ID once for each enabled-pool request and holds its model route through admission. The three account-refusal retry sites in `adapter-dispatch.ts`, `adapter-continuation.ts` and `sidecar-execution.ts` use the same route, keep the original refusal if no replacement exists inside it, and preserve existing send and output replay limits. A local cooldown returns 429 with the earliest known Retry-After among accounts the route can use when they recover, and answers a usage limit when every held account is on spent quota ([quota exhaustion answer](../providers/anthropic-account-pool.md#quota-exhaustion-answer-and-fresh-read-recovery)); explicit fallback includes usable ordinary-pool accounts even when the saved route IDs have been removed, while a strict route stays route-scoped. Selection, refusal and 429-rotation logs use the rule’s 1-based `route:#<n>` position, never its name.
 Classified 429 admission follows the [Anthropic account-pool contract](../providers/anthropic-account-pool.md#classified-429-admission). Classified account-entitlement 403 recovery follows the [Anthropic account-pool contract](../providers/anthropic-account-pool.md#account-entitlement-refusal-recovery).
 `src/server/responses/compaction-recovery-policy.ts` is a pure eligibility policy, not a dispatcher.
 It requires explicit configuration and normalized attempt evidence, preserves ordinary requests,
@@ -81,7 +81,7 @@ logical request holds one replacement grant, whichever stage asks for it. The gr
 request's execution budget, so a combo child that derives its own scope draws on the same
 counter rather than holding a second. A replacement never widens a send budget: it still has to
 fit inside the allowance the leg already had, and it is charged to the same counter every other
-send goes through.
+send goes through; initial Combo bookings follow the [prepaid-send contract](responses-spend.md#prepaid-initial-sends).
 
 Generic translated dispatch in `src/server/responses/adapter-dispatch.ts` asks the same pre-header gate for initial and rebuilt sends, sharing the replacement grant and charging each physical send once to the existing request/workflow budgets. Adapter-owned transports and translated post-header failures are excluded. Coverage: `tests/responses/responses-translated-reset.test.ts`. The number of replacements is the request's as well. A leg reads it from `route.provider`, which
 credential rotation, OAuth refresh, transport resolution and each combo target reassign inside one
@@ -156,7 +156,7 @@ The shared Responses path follows the [bounded multipart recovery contract](../s
 
 ## Upstream key attempt accounting
 
-Key identity is sealed at the guarded physical dispatch after queued selections are rebuilt.
+Translated Anthropic billing recovery uses the [immutable physical-send ownership contract](../providers/anthropic-key-billing.md). Its initial send, credential hop and later mixed-class refusals share the request budget. A denied hop retains the upstream refusal, and a leased pacing body rewrap carries the existing marker rather than attributing the response to rebuilt headers. Key identity is sealed at the guarded physical dispatch after queued selections are rebuilt.
 Raw adapter terminal usage is recorded before continuation, search, or image loops merge it;
 repeated parsing of one physical response does not count it twice. Key changes preserve the
 previous attempt while retaining the active attempt object shared by streaming/combo callbacks.
@@ -340,9 +340,9 @@ endpoint. A mismatch marks the credential domain as rewritten, exactly like a sh
 intercept, and forces the portable summarizer even for a native-capable target: `compact.ts`
 skips `/responses/compact`, and `request-prepare.ts` sets `parsed._portableCompaction`, which
 `request-sidecar-auth.ts` (`routedCompaction`) and the passthrough adapter's compaction body
-build both honor for canonical ChatGPT destinations. Native ciphertext is replayable only by the
-backend that minted it; the conversation model would otherwise resume with an omission marker
-in place of its history.
+build both honor for canonical ChatGPT destinations. Native ciphertext is replayable only by the backend that minted it; the conversation model would otherwise resume with an omission marker in place of its history.
+
+The portable Responses summarizer in `src/adapters/openai-responses/passthrough.ts` uses `src/adapters/openai-responses/compaction-search-history.ts` to render remaining top-level `web_search_call` items, after bridge restoration, as assistant reference notes labeled untrusted historical metadata (not instructions or fetched page content). The allowlist keeps string status and action fields (type, query/queries, URL, pattern, source URL/title/type); opaque state, IDs, unknown fields and malformed values are omitted. Strings are cut at 2048 code units, lists at 20 entries, and one request carries at most 64 KiB of notes; later hosted cells collapse into a single omission note reserved inside that budget. Tool declarations stay absent, bridge-restored call/result pairs and existing messages/citations stay intact, and only the summary request changes, never stored history, ordinary turns or native compaction. A failed summary publishes no replacement history. Lite requests retain `parallel_tool_calls=false`, which the upstream requires even without tool declarations.
 
 `tests/responses/responses-compaction-override.test.ts` covers source filtering, trigger selection, config
 validation, native and routed handlers, credential retention, portable summaries and replay, and combo failover.
@@ -409,7 +409,7 @@ the public server reference already documents. The 504 and a drop after the resp
 are never replaced. Only the 502 of a socket that closed or errored before any Responses event
 may be replaced over HTTP, when the provider opted into `retryOnReset` (#4191). That replacement
 claims from the request's one allowance; if it resets before its head, that is the pre-header row
-again and may use a configured second replacement, otherwise it settles as the refusal.
+again and may use a configured second replacement, otherwise it settles as the refusal. For plain-main quota, each physical HTTP replacement renews the dispatch object identity while copying every original credential and config fence unchanged. The failed WS observer retains its claimed object, so only the live replacement attempt may publish fresh HTTP headers. Each rebuilt WS observer also renews its own live dispatch copy; an upgrade failure with no quota frames leaves that attempt unclaimed for HTTP fallback publication. HTTP delivery retains the arrival dispatch for the arrival headers across deferred body recovery, even when that recovery renews the auth context's dispatch.
 
 This reclassification is the recorded behaviour change: before it, the pre-header refusal
 borrowed `upstream_closed_before_response` and its 502, which multiplied the duplicate send
@@ -538,11 +538,11 @@ Dashboard Fast-row persistence and client refresh follow the [Fast selector rows
 
 ## Account refusal and rotation boundaries
 
-Native Responses uses the existing pre-stream OAuth HTTP-429 account rotation: account quorum and
-cooldown remain in force, while generic OAuth uses the stable snapshot ceiling described below. The
-complete credential/transport/replay identity is refreshed, and usage is attributed to the serving
-account. Single-account installs do not rotate; a missing alternate credential preserves the original
-error while transient recovery remains available.
+Copilot Auto replacement, OAuth-refresh and native-429 negotiation follow the [Copilot Auto failure contract](../providers-and-adapters.md#github-copilot-auto-selection): safe refusal mapping, abort/lease cleanup, hop refund and sidecar refusal preservation.
+Refreshed or rotated Copilot native Responses may hand off only to the known Chat adapter, retaining the request-owned inference-401 guard and existing admission, translator and send budget without recursive setup; Chat 401 refresh renegotiates before rebuilding.
+Transferred 429 permits are rebooked against the actual Chat target and settled by physical-send reporting; unused or untransferred permits refund even on negotiation failure or early sidecar/build exit.
+Native Responses retains pre-stream OAuth HTTP-429 quorum, cooldown and the generic stable snapshot ceiling below. The complete credential/transport/replay identity refreshes; usage belongs to the serving account.
+Single-account installs do not rotate; a missing alternate credential preserves the original error while transient recovery remains available. Translated Anthropic exact revoked-token 401s follow [the account-pool contract](../providers/anthropic-account-pool.md#revoked-oauth-access-token-recovery), with existing output and send-budget gates. A pre-output upstream refusal on the native Codex Pool (#6969) uses the transient ladder and the account move that an HTTP 5xx always had. The WebSocket exchange projects the refusal ([WS prelude contract](responses-wire-shapes.md)); `fetchWithTransientRetry` retries the same account within the request's shared send budget, then `retryCodexPoolOnAlternateAccount` makes its one bounded move under the existing fixed-account, stored-401, uploaded-file, account-failover-permit and recovery-window guards. Whatever survives reaches the client as the original stream, so an exhausted pool answers exactly as before. Each projection's account outcome is written once: by the move helper (marked on the projection, so a late denial does not write it again and delivery's terminal recorder skips the restored stream), by delivery when no move was attempted, or by the dispatch catch when the caller aborts or the budget refuses during the backoff; a later send's transport failure stays that path's single writer. Combo children, 401-refresh and rebuild legs do not opt in. Native compact moves a 5xx that survives its own ladder to one alternate account as well: the alternate's identity governs its admission, the first answer stays intact when that send is refused before it physically leaves (budget, dispatch guard, pacing), a 5xx whose body confirms quota keeps the quota path, and the first account is recorded with its real status once the alternate was sent. Covered by `tests/responses/ws-pre-output-refusal.test.ts`, `tests/responses/responses-pool-overload-failover.test.ts` and `tests/responses/compact-transient-alternate.test.ts`.
 
 Kiro adapter additionally classifies bounded HTTP 400/403/429 refusals before output.
 Confirmed monthly exhaustion is persisted for the sent login, suspension is quarantined

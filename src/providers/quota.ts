@@ -15,6 +15,7 @@ import {
 } from "./kiro-usage";
 import { mapQuotaRoster, readProviderApiKeyQuotas, type ProviderApiKeyQuota } from "./quota-key-accounts";
 import type { OcxConfig, OcxProviderConfig } from "../types";
+import { isPassiveRead } from "../lib/passive-read";
 import type { ProviderQuota, QuotaFailureCode } from "./quota-types";
 import {
   accountReportCurrent,
@@ -23,7 +24,7 @@ import {
   captureProviderReportEpochs, providerReportEpochChanged,
   cacheKeyWithAggregationState,
   getProviderQuotaReportCache,
-  hasCodexPoolProvider,
+  hasCodexPoolProvider, heldProviderQuotaReports,
   inflight,
   invalidationEpoch,
   isBuiltInChatGptForwardProvider,
@@ -99,7 +100,7 @@ export {
   type ProviderAccountQuota,
 } from "./quota/account-cache";
 export { fetchAntigravityUsageQuota, isCanonicalAntigravityQuotaUrl, setAntigravityAccountQuotaTransportForTests } from "./quota/antigravity";
-export { parseOllamaCloudQuota, parseZaiQuotaLimits, providerApiKeyQuotaMode } from "./quota/vendor-probes-key";
+export { parseOllamaCloudBalance, parseOllamaCloudQuota, parseZaiQuotaLimits, providerApiKeyQuotaMode } from "./quota/vendor-probes-key";
 export { parseXaiCreditsResponse } from "./quota/vendor-probes-oauth";
 export async function fetchProviderApiKeyQuotas(config: OcxConfig, name: string, forceRefresh = false): Promise<ProviderApiKeyQuota[]> {
   const provider = config.providers[name];
@@ -233,6 +234,8 @@ export function flushProviderQuotaObservationsForTests(): Promise<void> {
 }
 
 export async function fetchProviderQuotaReports(config: OcxConfig, forceRefresh = false): Promise<ProviderQuotaResponse> {
+  // A passive read (a Remote Link Child's, #6959) shows the held reports and starts nothing.
+  if (isPassiveRead()) return heldProviderQuotaReports(Object.keys(config.providers));
   // A Pool report's cache signature and provider fetch must share one account snapshot.
   // Preserve force semantics when deciding whether that snapshot refreshes upstream data.
   const prefetchedCodexSnapshot = hasCodexPoolProvider(config)

@@ -129,6 +129,16 @@
       ]
     },
     {
+      "path": "codex-prompts.md",
+      "tier": 2,
+      "title": "Codex Prompts",
+      "scope": "Prompt-layer repair, base import previews and bounded text-probe sources.",
+      "documents": [
+        "src/codex/",
+        "src/server/"
+      ]
+    },
+    {
       "path": "local-messaging.md",
       "tier": 3,
       "title": "Local Codex Messaging",
@@ -150,6 +160,13 @@
       ]
     },
     {
+      "path": "catalog-effort-clamp.md",
+      "tier": 2,
+      "title": "Effort-clamp observations",
+      "scope": "Persisted effort-clamp observation identity and idempotent sync notices.",
+      "documents": ["src/codex/runtime.ts", "src/codex/catalog/effort.ts"]
+    },
+    {
       "path": "subagents.md",
       "tier": 2,
       "title": "Subagents And Multi-Agent Surface",
@@ -164,12 +181,13 @@
       "path": "transports/byte-accounting.md",
       "tier": 3,
       "title": "Byte Accounting",
-      "scope": "Request-copy and stream-buffer byte accounting shared by parsing, SSE rewriting, the adapters, and the translator budget.",
+      "scope": "Request-copy and stream-buffer byte accounting shared by parsing, SSE rewriting, the adapters, and the translator budget, plus durable spill admission.",
       "documents": [
         "src/adapters/",
         "src/chat/",
         "src/lib/",
-        "src/server/"
+        "src/server/",
+        "src/responses/"
       ]
     },
     {
@@ -319,6 +337,18 @@
         "src/combos/",
         "src/server/",
         "src/usage/"
+      ]
+    },
+    {
+      "path": "providers/anthropic-key-billing.md",
+      "tier": 4,
+      "title": "Anthropic API-key Billing Recovery",
+      "scope": "Exact billing refusal evidence, immutable physical credential ownership, pacing provenance and bounded pre-output key recovery.",
+      "documents": [
+        "src/providers/anthropic-billing-refusal.ts",
+        "src/providers/anthropic-billing-ownership.ts",
+        "src/providers/anthropic-billing-recovery.ts",
+        "src/providers/request-pacing.ts"
       ]
     },
     {
@@ -517,6 +547,32 @@
       ]
     },
     {
+      "path": "desktop-terminal-command.md",
+      "tier": 6,
+      "title": "Desktop-owned terminal command",
+      "scope": "Desktop-owned ocx command on PATH: record and journal, POSIX shim and shell blocks, Windows user Path, private-path ACL policy, and the local Terminal command page.",
+      "documents": [
+        "desktop/src-tauri/src/cli_command.rs",
+        "desktop/src-tauri/src/cli_command_record.rs",
+        "desktop/src-tauri/src/cli_command_posix.rs",
+        "desktop/src-tauri/src/cli_command_windows.rs",
+        "desktop/ui/cli.html",
+        "desktop/ui/cli.js"
+      ]
+    },
+    {
+      "path": "desktop-start-at-login.md",
+      "tier": 6,
+      "title": "Desktop Start at Login",
+      "scope": "macOS tray Start at Login judgment shared with Startup safety, its parity fixture, click rules, and the guarded launch-origin migration.",
+      "documents": [
+        "desktop/src-tauri/src/first_run.rs",
+        "desktop/src-tauri/src/login_registration.rs",
+        "desktop/src-tauri/src/tray_login.rs",
+        "src/service/desktop-startup.ts"
+      ]
+    },
+    {
       "path": "ops/service-and-sidecars.md",
       "tier": 6,
       "title": "Background Service And Sidecars",
@@ -527,6 +583,19 @@
         "src/service-manager-probe.ts",
         "src/sidecar/",
         "src/update/"
+      ]
+    },
+    {
+      "path": "ops/service-health-recovery.md",
+      "tier": 6,
+      "title": "Service Health Recovery",
+      "scope": "Opt-in sentinel that turns a hung but listening managed service proxy into an exit its manager restarts.",
+      "documents": [
+        "src/service/health-sentinel-launch.ts",
+        "src/service/health-sentinel-main.ts",
+        "src/service/health-sentinel-policy.ts",
+        "src/service/health-sentinel-probe.ts",
+        "src/service/health-sentinel-windows.ts"
       ]
     },
     {

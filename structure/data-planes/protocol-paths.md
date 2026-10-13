@@ -257,6 +257,8 @@ transport side (send budget, failover, logging) is in
 
 ## Managed native Messages
 
+Native key-pool credit-balance refusals follow the same [Anthropic API-key billing contract](../providers/anthropic-key-billing.md) as translated Responses: immutable outgoing-key ownership, bounded pre-output inspection, a one-hour billing key cooldown and a shared physical-send ceiling, including under concurrency pacing. Cancellation and emitted text/tools never authorize another billing send.
+
 Behind `protocols.rollout.managedMessagesNative` (explicit policy defaults off). An enabled Anthropic
 pool supplies absent native flags for its settled provider under the [pool native preference](../providers/anthropic-account-pool.md#native-request-preference); explicit false/malformed flags remain off. A Messages request whose settled
 route is a direct, key-auth `anthropic` provider is sent as Messages instead of replaying through
@@ -399,6 +401,12 @@ native beta allowance retains the source-listed inline-tool, per-turn control, t
 advisor and scoped-cache schemas. Advisor may perform sub-inference already requested by the caller;
 no feature or beta-gated body is injected. Generic managed callers keep the narrower allowance,
 and compatible destinations receive no first-party allowance. These handles grant no credential authority.
+
+Managed native Messages record validated caller controls as `requestedEffort` on the final row
+and physical attempts. Existing annotations win; otherwise a recognized `output_config.effort`
+wins, followed by disabled thinking (`none`) or an enabled positive safe-integer budget
+(`budget:<tokens>`). Adaptive thinking without an explicit effort stays absent. This metadata
+comes from the body handed to the lane; it does not rewrite the wire or confirm upstream effort.
 
 `handleNativeMessages` mirrors native Chat on the shared pieces: `beginInferenceAttempt`,
 `createFinalRequestLog`, the request spend tracker charged per physical send, proactive key

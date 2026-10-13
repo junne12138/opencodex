@@ -33,6 +33,7 @@ import { resolveContextPrincipal } from "../auth-cors";
 import { resolveSkillsSnapshotScopeKey, snapshotSkillsCatalogInBody } from "./skills-snapshot";
 import {
   isShadowSourceModel,
+  shadowCallPreservesSelectedModel,
   shadowSourceModelPrefix,
   shouldInterceptShadowCall,
 } from "../../lib/shadow-call";
@@ -275,10 +276,11 @@ export async function prepareResponsesRequest(
     }
   }
   let shadowCallIntercepted = false;
-  // A spawned sub-agent turn names its model on purpose; gpt-6-luna is both the helper
-  // slug and a default sub-agent model, so neither intercept site may rewrite that turn.
+  // Luna is also selectable by users/children. Both intercept sites use the same
+  // per-turn provenance; WS frames must not inherit the handshake's classification.
   const threadSpawn = isThreadSpawnRequest(req.headers);
-  if (!concreteSelection && !options.compactionRoutingOverride && !options.internalDecisionCall && !threadSpawn && !memoryModelApplies && body && typeof body === "object" && !Array.isArray(body)) {
+  const preserveShadowModel = shadowCallPreservesSelectedModel(body, req.headers, options.inboundTransport);
+  if (!concreteSelection && !options.compactionRoutingOverride && !options.internalDecisionCall && !preserveShadowModel && !memoryModelApplies && body && typeof body === "object" && !Array.isArray(body)) {
     const shadowIntercept = config.shadowCallIntercept;
     const rawShadowModel = (body as { model?: unknown }).model;
     if (shadowIntercept?.enabled && shadowIntercept.model && typeof rawShadowModel === "string"
@@ -381,6 +383,10 @@ export async function prepareResponsesRequest(
   let toolBridgeMaps: ReturnType<typeof buildToolBridgeMaps>;
   try {
     parsed = parseRequest(body);
+    if (options.inboundWire === "anthropic") {
+      parsed._nativeReasoningReplay = options.nativeReasoningReplay;
+      parsed._nativeReasoningMint = options.nativeReasoningMint;
+    }
     parsed._promptCacheKeyIsSharedCohort = options.promptCacheKeyIsSharedCohort;
     // The body may have been rebuilt since the inbound observation (previous-response
     // expansion); alias the parsed raw body to the same draft so the outbound
@@ -609,7 +615,7 @@ export async function prepareResponsesRequest(
     }
     const _sci = config.shadowCallIntercept;
     let shadowRoute: RouteResult | undefined;
-    if (!concreteSelection && !memoryRoute && !options.memoryModelPhase && !options.compactionRoutingOverride && !options.internalDecisionCall && !threadSpawn && _sci?.enabled && _sci.model && isShadowSourceModel(parsed.modelId, _sci.sourceModels)) {
+    if (!concreteSelection && !memoryRoute && !options.memoryModelPhase && !options.compactionRoutingOverride && !options.internalDecisionCall && !preserveShadowModel && _sci?.enabled && _sci.model && isShadowSourceModel(parsed.modelId, _sci.sourceModels)) {
       const sourcePrefix = shadowSourceModelPrefix(parsed.modelId, _sci.sourceModels)!;
       let sourceIdentity = { providerName: OPENAI_CODEX_PROVIDER_ID, modelId: sourcePrefix };
       try {
